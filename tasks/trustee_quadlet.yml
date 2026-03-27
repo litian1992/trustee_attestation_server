@@ -2,34 +2,34 @@
 ---
 - name: Ensure required packages are installed
   ansible.builtin.package:
-    name: "{{ __trustee_attestation_server_trustee_packages }}"
+    name: "{{ __trustee_server_trustee_packages }}"
     state: present
-    use: "{{ (__trustee_attestation_server_is_ostree | d(false)) |
+    use: "{{ (__trustee_server_is_ostree | d(false)) |
           ternary('ansible.posix.rhel_rpm_ostree', omit) }}"
 
 - name: Ensure quadlet install directory exists
   ansible.builtin.file:
-    path: "{{ __trustee_attestation_server_quadlet_install_dir }}"
+    path: "{{ __trustee_server_quadlet_install_dir }}"
     state: directory
     mode: "0755"
 
 - name: Create a temporary directory for the quadlet repository
   ansible.builtin.tempfile:
     state: directory
-  register: __trustee_attestation_server_quadlet_repo_dir
+  register: __trustee_server_quadlet_repo_dir
 
 - name: Download Trustee Server quadlet files from GitHub repository
   ansible.builtin.git:
-    repo: "{{ __trustee_attestation_server_quadlet_repo_url }}"
-    dest: "{{ __trustee_attestation_server_quadlet_repo_dir.path }}"
-    version: "{{ __trustee_attestation_server_quadlet_repo_branch }}"
+    repo: "{{ __trustee_server_quadlet_repo_url }}"
+    dest: "{{ __trustee_server_quadlet_repo_dir.path }}"
+    version: "{{ __trustee_server_quadlet_repo_branch }}"
     depth: 1
     force: true
   register: quadlet_repo_download
 
 - name: Find Trustee Server quadlet files in repository
   ansible.builtin.find:
-    paths: "{{ __trustee_attestation_server_quadlet_repo_dir.path }}/{{ __trustee_attestation_server_quadlet_repo_path }}"
+    paths: "{{ __trustee_server_quadlet_repo_dir.path }}/{{ __trustee_server_quadlet_repo_path }}"
     patterns:
       - "*.container"
       - "*.volume"
@@ -40,13 +40,13 @@
 
 - name: Fail if no Trustee Server quadlet files found
   ansible.builtin.fail:
-    msg: "No quadlet files found in {{ __trustee_attestation_server_quadlet_repo_url }}/{{ __trustee_attestation_server_quadlet_repo_path }}"
+    msg: "No quadlet files found in {{ __trustee_server_quadlet_repo_url }}/{{ __trustee_server_quadlet_repo_path }}"
   when: quadlet_files_found.files | length == 0
 
 - name: Copy Trustee Server quadlet files to install directory
   ansible.builtin.copy:
     src: "{{ item.path }}"
-    dest: "{{ __trustee_attestation_server_quadlet_install_dir }}/{{ item.path | basename }}"
+    dest: "{{ __trustee_server_quadlet_install_dir }}/{{ item.path | basename }}"
     mode: "0644"
     remote_src: true
     force: true
@@ -55,13 +55,13 @@
 
 - name: Stat repository configs directory
   ansible.builtin.stat:
-    path: "{{ __trustee_attestation_server_quadlet_repo_dir.path }}/configs"
+    path: "{{ __trustee_server_quadlet_repo_dir.path }}/configs"
   register: __repo_configs_dir
 
 - name: Copy Trustee Server config files to config directory
   ansible.builtin.copy:
-    src: "{{ __trustee_attestation_server_quadlet_repo_dir.path }}/configs/"
-    dest: "{{ __trustee_attestation_server_config_dir }}/"
+    src: "{{ __trustee_server_quadlet_repo_dir.path }}/configs/"
+    dest: "{{ __trustee_server_config_dir }}/"
     mode: "0644"
     remote_src: true
     force: true
@@ -70,28 +70,28 @@
 - name: Generate certificates for all components
   ansible.builtin.shell: |
     # Trustee Server SSL
-    if [ ! -f {{ __trustee_attestation_server_config_dir }}/kbs/server.key ] || [ ! -f {{ __trustee_attestation_server_config_dir }}/kbs/server.crt ]; then
-      openssl req -x509 -newkey rsa:2048 -nodes -keyout {{ __trustee_attestation_server_config_dir }}/kbs/server.key \
+    if [ ! -f {{ __trustee_server_config_dir }}/kbs/server.key ] || [ ! -f {{ __trustee_server_config_dir }}/kbs/server.crt ]; then
+      openssl req -x509 -newkey rsa:2048 -nodes -keyout {{ __trustee_server_config_dir }}/kbs/server.key \
         -subj "/CN=$(hostname -f)/O=Red Hat" \
         -addext "basicConstraints=CA:FALSE" \
         -addext "keyUsage=digitalSignature,keyEncipherment" \
         -addext "extendedKeyUsage=serverAuth" \
         -addext "subjectAltName=DNS:$(hostname -f)" \
-        -out {{ __trustee_attestation_server_config_dir }}/kbs/server.crt
+        -out {{ __trustee_server_config_dir }}/kbs/server.crt
     fi
     # KBS authentication key pair
-    if [ ! -f {{ __trustee_attestation_server_config_dir }}/kbs/auth.key ] || [ ! -f {{ __trustee_attestation_server_config_dir }}/kbs/auth.pub ]; then
-      openssl genpkey -algorithm ed25519 -out {{ __trustee_attestation_server_config_dir }}/kbs/auth.key
-      openssl pkey -in {{ __trustee_attestation_server_config_dir }}/kbs/auth.key -pubout -out {{ __trustee_attestation_server_config_dir }}/kbs/auth.pub
+    if [ ! -f {{ __trustee_server_config_dir }}/kbs/auth.key ] || [ ! -f {{ __trustee_server_config_dir }}/kbs/auth.pub ]; then
+      openssl genpkey -algorithm ed25519 -out {{ __trustee_server_config_dir }}/kbs/auth.key
+      openssl pkey -in {{ __trustee_server_config_dir }}/kbs/auth.key -pubout -out {{ __trustee_server_config_dir }}/kbs/auth.pub
     fi
     # Attestation Service token signer key pair
-    if [ ! -f {{ __trustee_attestation_server_config_dir }}/as/token.key ] || [ ! -f {{ __trustee_attestation_server_config_dir }}/as/token.crt ]; then
-      openssl ecparam -name prime256v1 -genkey -noout -out {{ __trustee_attestation_server_config_dir }}/as/token.key
-      openssl req -new -x509 -key {{ __trustee_attestation_server_config_dir }}/as/token.key \
-        -out {{ __trustee_attestation_server_config_dir }}/as/token.crt -days 3550 \
+    if [ ! -f {{ __trustee_server_config_dir }}/as/token.key ] || [ ! -f {{ __trustee_server_config_dir }}/as/token.crt ]; then
+      openssl ecparam -name prime256v1 -genkey -noout -out {{ __trustee_server_config_dir }}/as/token.key
+      openssl req -new -x509 -key {{ __trustee_server_config_dir }}/as/token.key \
+        -out {{ __trustee_server_config_dir }}/as/token.crt -days 3550 \
         -subj "/CN=as-token-signer/O=Red Hat"
-      mkdir -p {{ __trustee_attestation_server_config_dir }}/kbs/trusted_certs
-      cp {{ __trustee_attestation_server_config_dir }}/as/token.crt {{ __trustee_attestation_server_config_dir }}/kbs/trusted_certs/token0.crt
+      mkdir -p {{ __trustee_server_config_dir }}/kbs/trusted_certs
+      cp {{ __trustee_server_config_dir }}/as/token.crt {{ __trustee_server_config_dir }}/kbs/trusted_certs/token0.crt
     fi
   changed_when: true
   no_log: true
@@ -109,22 +109,22 @@
 
 - name: Get the installed Trustee Server pod name
   ansible.builtin.find:
-    paths: "{{ __trustee_attestation_server_quadlet_install_dir }}"
+    paths: "{{ __trustee_server_quadlet_install_dir }}"
     patterns: "*.pod"
-  register: __trustee_attestation_server_pod_name
+  register: __trustee_server_pod_name
 
 - name: Enable and start Trustee Server services
   ansible.builtin.systemd:
-    name: "{{ __trustee_attestation_server_pod_name.files[0].path | basename | replace('.pod', '-pod.service') }}"
+    name: "{{ __trustee_server_pod_name.files[0].path | basename | replace('.pod', '-pod.service') }}"
     enabled: true
     state: restarted
     daemon_reload: true
-  when: __trustee_attestation_server_pod_name.files | length > 0
+  when: __trustee_server_pod_name.files | length > 0
   failed_when: false
 
 # TODO keep the server.crt and DNS names in the role variables
 
 - name: Clean up temporary repository directory
   ansible.builtin.file:
-    path: "{{ __trustee_attestation_server_quadlet_repo_dir.path }}"
+    path: "{{ __trustee_server_quadlet_repo_dir.path }}"
     state: absent

@@ -2,4 +2,4 @@
 ---
 # Put internal variables here with Red Hat Enterprise Linux 8 specific values.
 
-__trustee_attestation_server_services: []
+__trustee_server_services: []
